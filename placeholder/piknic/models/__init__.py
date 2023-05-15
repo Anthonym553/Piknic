@@ -1,0 +1,1 @@
+from .location import Location_Post

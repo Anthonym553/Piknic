@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Piknic</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="https://api.tiles.mapbox.com/mapbox-gl-js/v2.9.2/mapbox-gl.js"></script>
+    <link
+      href="https://api.tiles.mapbox.com/mapbox-gl-js/v2.9.2/mapbox-gl.css"
+      rel="stylesheet"
+    />
+    <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v4.7.0/mapbox-gl-geocoder.min.js"></script>
+    <link
+      rel="stylesheet"
+      href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v4.7.0/mapbox-gl-geocoder.css"
+      type="text/css"
+    />
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+      }
+
+      #map {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 100%;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="map"></div>
+    <script>
+      mapboxgl.accessToken =
+        "pk.eyJ1IjoiY2FtZ3NhYjk5IiwiYSI6ImNsYjc2ZXBqbjA4Nzkzdm1ydHowcmZ4MGkifQ.dtcf_6JszrYN3aYL8c8uMQ";
+
+      // Create a map object
+      const map = new mapboxgl.Map({
+        container: "map",
+        style: "mapbox://styles/mapbox/streets-v12",
+        center: [-77.3665, 35.6069],
+        zoom: 12,
+      });
+
+      // Add geocoder
+      const geocoder = new MapboxGeocoder({
+        accessToken: mapboxgl.accessToken,
+        mapboxgl: mapboxgl,
+        zoom: 13,
+        placeholder: "Enter an address or place name",
+      });
+
+      // Add geolocate control
+      const geolocate = new mapboxgl.GeolocateControl({
+        positionOptions: {
+          enableHighAccuracy: true,
+        },
+        trackUserLocation: true,
+        showUserHeading: true,
+      });
+
+      let currentMarkers = []
+
+      // Show nearby restaurants
+      function showNearbyRestaurants(lat, lng, radius) {
+        let postData = { lat, lng, radius };
+        fetch(`/maps/get_all_locations/`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(postData),
+        })
+          .then((response) => response.json())
+          .then((restaurants) => {
+            restaurants.forEach((restaurant) => {
+              let popup = new mapboxgl.Popup({ offset: 25 }).setHTML(
+                `<h2><strong>${restaurant.name}</strong></h2><b>${restaurant.address}</b></br><p>${restaurant.category}</p>`
+              );
+              let marker = new mapboxgl.Marker({ color: "#008000" })
+                .setLngLat(restaurant.location)
+                .setPopup(popup)
+                .addTo(map)
+                // save markers to remove them later
+                currentMarkers.push(marker);
+            });
+            // Remove markers from previous search
+            if (currentMarkers.length > 8) {
+            currentMarkers.forEach(marker => marker.remove());
+            currentMarkers = [];
+            }
+          });
+      }
+
+      // Add event listeners
+      map.on("load", () => {
+        map.addControl(geolocate);
+
+        // When a user selects a result from the geocoder, show nearby restaurants
+        geocoder.on("result", async (result) => {
+          const [lng, lat] = result.result.center;
+          console.log([lat, lng]);
+          showNearbyRestaurants(lat, lng, 1);
+        });
+
+        // When a user clicks the geolocate button, show nearby restaurants
+        geolocate.on("geolocate", () => {
+          const { latitude, longitude } = geolocate._lastKnownPosition.coords;
+          showNearbyRestaurants(latitude, longitude, 600);
+        });
+
+        map.addControl(geocoder, "top-left");
+
+        const marker = new mapboxgl.Marker({ color: "#000000" });
+
+        // When a user double clicks on the map, show nearby restaurants
+        map.on("dblclick", (e) => {
+          const [lat, lng] = [e.lngLat.lat, e.lngLat.lng];
+          marker.setLngLat([lat, lng]).addTo(map);
+          showNearbyRestaurants(lat, lng, 1);
+        });
+      });
+    </script>
+  </body>
+</html>
